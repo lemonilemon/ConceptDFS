@@ -1,8 +1,8 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch
-from src.cli import export_report
-from src.db import init_db, insert_node
+from concept_dfs.cli import export_report
+from concept_dfs.db import init_db, insert_node
 
 @pytest.fixture
 def test_db(tmp_path):
@@ -14,7 +14,7 @@ def test_db(tmp_path):
         os.remove(db_file)
 
 def test_export_report_empty(test_db):
-    with patch("src.cli.console.print") as mock_print:
+    with patch("concept_dfs.cli.console.print") as mock_print:
         export_report()
         mock_print.assert_called_with("[yellow]No concepts found in database to export.[/yellow]")
 
@@ -41,16 +41,16 @@ def test_export_report_with_data(test_db):
     # Cleanup
     os.remove("report.md")
 
-@patch("src.cli.Prompt.ask")
-@patch("src.cli.fetch_concept")
+@patch("concept_dfs.cli.Prompt.ask")
+@patch("concept_dfs.cli.fetch_concept")
 def test_main_loop(mock_fetch_concept, mock_ask, tmp_path):
     # Set up the environment for the test
     db_file = tmp_path / "test_main_concepts.db"
     os.environ["CONCEPT_DFS_DB"] = str(db_file)
-    from src.db import init_db
+    from concept_dfs.db import init_db
     init_db()
     
-    from src.llm import ConceptResponse
+    from concept_dfs.llm import ConceptResponse
     
     # 1. 'Graph Theory' is not in cache, so fetch_concept is called.
     # 2. 'Keywords' are presented, Prompt.ask('Your choice') is called.
@@ -70,7 +70,7 @@ def test_main_loop(mock_fetch_concept, mock_ask, tmp_path):
     ]
     
     import sys
-    from src.cli import main
+    from concept_dfs.cli import main
     
     # Mock sys.argv
     with patch.object(sys, 'argv', ['concept-dfs', 'Graph Theory']):

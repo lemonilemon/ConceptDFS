@@ -1,5 +1,17 @@
 #!/bin/bash
-# A simple wrapper to execute SQL against the local cache.
-# Providing an absolute path is better but keeping to the design: 
-# it expects concepts.db in the cwd where it gets called.
-sqlite3 concepts.db "$1"
+# A simple wrapper to execute SQL against the local cache using Python.
+DB_PATH=${CONCEPT_DFS_DB:-concepts.db}
+python3 -c "
+import sqlite3, sys
+conn = sqlite3.connect('$DB_PATH')
+cursor = conn.cursor()
+try:
+    cursor.execute(sys.argv[1])
+    rows = cursor.fetchall()
+    for row in rows:
+        print(row)
+    conn.commit()
+except Exception as e:
+    print(f'Error: {e}', file=sys.stderr)
+    sys.exit(1)
+" "$1"

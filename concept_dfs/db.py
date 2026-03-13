@@ -3,11 +3,12 @@ import os
 from contextlib import contextmanager
 from typing import Optional, Dict, Any, List
 
-DB_PATH = os.environ.get("CONCEPT_DFS_DB", "concepts.db")
+def get_db_path():
+    return os.environ.get("CONCEPT_DFS_DB", "concepts.db")
 
 @contextmanager
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     try:
         yield conn

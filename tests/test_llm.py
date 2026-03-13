@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
-from src.llm import fetch_concept, ConceptResponse
+from concept_dfs.llm import fetch_concept, ConceptResponse
 
-@patch("src.llm.completion")
+@patch("concept_dfs.llm.completion")
 def test_fetch_concept(mock_completion):
     mock_response = MagicMock()
     mock_response.choices[0].message.content = '{"explanation": "This is a test explanation.", "keywords": ["Keyword 1", "Keyword 2"]}'
@@ -15,7 +15,7 @@ def test_fetch_concept(mock_completion):
     assert "Keyword 1" in result.keywords
     assert "Keyword 2" in result.keywords
 
-@patch("src.llm.completion")
+@patch("concept_dfs.llm.completion")
 def test_fetch_concept_with_invalid_json(mock_completion):
     mock_response = MagicMock()
     mock_response.choices[0].message.content = 'Invalid JSON response'

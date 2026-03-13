@@ -1,6 +1,6 @@
 import os
 import pytest
-from src.db import init_db, get_node, insert_node, get_all_nodes, get_all_edges
+from concept_dfs.db import init_db, get_node, insert_node, get_all_nodes, get_all_edges
 
 @pytest.fixture(autouse=True)
 def test_db(tmp_path):
