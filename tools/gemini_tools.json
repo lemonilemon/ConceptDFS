@@ -1,0 +1,7 @@
+[
+  {
+    "name": "inspect_concept_db",
+    "description": "Executes a SQL query against the local SQLite database (concepts.db). Use this to verify data insertion, check for duplicate nodes, or debug infinite loops.",
+    "command": "./tools/inspect_db.sh \"$1\""
+  }
+]

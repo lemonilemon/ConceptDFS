@@ -1,0 +1,15 @@
+[project]
+name = "concept_dfs"
+version = "0.1.0"
+description = "A keyboard-driven CLI tool for exploring branching knowledge using a Stack-based DFS over an LLM-generated graph."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "litellm>=1.0.0",
+    "pydantic>=2.0.0",
+    "rich>=13.0.0",
+    "pytest>=7.0.0"
+]
+
+[project.scripts]
+concept-dfs = "concept_dfs.cli:main"
