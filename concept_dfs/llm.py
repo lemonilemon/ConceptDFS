@@ -1,7 +1,7 @@
 import os
 import re
 from pydantic import BaseModel, Field
-from typing import Generator, List, Optional, Tuple, Union
+from typing import Generator, List, Optional, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage
 from pydantic import SecretStr
@@ -45,7 +45,7 @@ class KeywordsResponse(BaseModel):
 
 # Pattern to match KEYWORDS: ... at the end of streamed text
 _KEYWORDS_PATTERN = re.compile(
-    r"\n\s*(?:\*\*)?KEYWORDS(?:\*\*)?:\s*(.+?)$", re.IGNORECASE | re.DOTALL
+    r"\n\s*(?:\*\*)?KEYWORDS(?:\*\*)?:\s*(.+)$", re.IGNORECASE | re.MULTILINE
 )
 
 

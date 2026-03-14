@@ -11,6 +11,18 @@ console = Console()
 AUTH_FILE = DATA_DIR / "auth.json"
 
 
+class MissingAPIKeyError(Exception):
+    """Raised when no API key can be resolved for a provider."""
+
+    def __init__(self, provider_id: str, env_key: str):
+        self.provider_id = provider_id
+        self.env_key = env_key
+        super().__init__(
+            f"No API key found for provider '{provider_id}'. "
+            f"Set the {env_key} environment variable or run: concept-dfs auth"
+        )
+
+
 @dataclass
 class ProviderInfo:
     """Metadata for a supported LLM provider."""
@@ -90,32 +102,22 @@ def save_api_key(provider_id: str, key: str) -> None:
 
 
 def ensure_api_key(provider_id: str) -> str:
-    """Ensure an API key is available, prompting interactively if needed.
+    """Ensure an API key is available for the given provider.
 
-    Returns the API key.
+    Returns the API key if found (env var or saved auth).
+    Raises MissingAPIKeyError if no key is available.
+    Raises ValueError for unknown providers.
     """
     info = PROVIDERS.get(provider_id)
     if not info:
-        console.print(f"[bold red]Unknown provider: {provider_id}[/bold red]")
-        console.print(f"[dim]Supported providers: {', '.join(PROVIDERS.keys())}[/dim]")
-        raise SystemExit(1)
+        raise ValueError(
+            f"Unknown provider: {provider_id}. Supported: {', '.join(PROVIDERS.keys())}"
+        )
 
     key = get_api_key(provider_id)
 
     if not key:
-        console.print(f"\n[bold yellow]No API key found for {info.name}.[/bold yellow]")
-        console.print(
-            f"[dim]Set the [bold]{info.env_key}[/bold] environment variable, or enter it below to save it.[/dim]\n"
-        )
-
-        key = Prompt.ask(f"[bold cyan]{info.env_key}[/bold cyan]").strip()
-
-        if not key:
-            console.print("[bold red]No key provided. Exiting.[/bold red]")
-            raise SystemExit(1)
-
-        save_api_key(provider_id, key)
-        console.print(f"[bold green]Key saved to {AUTH_FILE}[/bold green]\n")
+        raise MissingAPIKeyError(provider_id, info.env_key)
 
     return key
 

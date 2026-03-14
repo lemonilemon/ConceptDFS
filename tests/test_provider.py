@@ -12,6 +12,7 @@ from concept_dfs.provider import (
     select_model,
     _load_auth,
     _save_auth,
+    MissingAPIKeyError,
     PROVIDERS,
     AUTH_FILE,
 )
@@ -71,16 +72,11 @@ def test_auth_file_permissions(isolate_auth):
     assert mode == 0o600
 
 
-@patch("concept_dfs.provider.Prompt.ask")
-def test_ensure_api_key_prompts_when_missing(mock_ask, isolate_auth):
-    mock_ask.return_value = "prompted-key-789"
-
-    key = ensure_api_key("openrouter")
-
-    assert key == "prompted-key-789"
-    mock_ask.assert_called_once()
-    # Key should now be saved for next time
-    assert get_api_key("openrouter") == "prompted-key-789"
+def test_ensure_api_key_raises_when_missing(isolate_auth):
+    with pytest.raises(MissingAPIKeyError) as exc_info:
+        ensure_api_key("openrouter")
+    assert exc_info.value.provider_id == "openrouter"
+    assert exc_info.value.env_key == "OPENROUTER_API_KEY"
 
 
 def test_ensure_api_key_uses_existing(monkeypatch, isolate_auth):
@@ -90,7 +86,7 @@ def test_ensure_api_key_uses_existing(monkeypatch, isolate_auth):
 
 
 def test_ensure_api_key_unknown_provider(isolate_auth):
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValueError, match="Unknown provider"):
         ensure_api_key("nonexistent-provider")
 
 
