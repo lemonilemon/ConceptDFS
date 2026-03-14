@@ -1,142 +1,102 @@
 import sys
 from rich.console import Console
-from rich.markdown import Markdown
-from rich.prompt import Prompt
-from concept_dfs.db import init_db, get_node, insert_node, get_all_nodes, get_all_edges
-from concept_dfs.llm import fetch_concept
+from concept_dfs.db import init_db, list_sessions, get_session_root
+from concept_dfs.provider import select_model, force_auth
+from concept_dfs.app import build_report, ConceptDFSApp
 
 console = Console()
 
-def export_report():
-    nodes = get_all_nodes()
-    edges = get_all_edges()
-    
-    if not nodes:
+
+def export_report(session_id=None):
+    """Export the exploration report to report.md (standalone CLI command)."""
+    content = build_report(session_id=session_id)
+    if content is None:
         console.print("[yellow]No concepts found in database to export.[/yellow]")
         return
-        
-    lines = ["# ConceptDFS Exploration Report\n"]
-    
-    lines.append("## Knowledge Graph\n")
-    lines.append("```mermaid")
-    lines.append("graph TD;")
-    
-    id_to_concept = {n['id']: n['concept'] for n in nodes}
-    
-    for edge in edges:
-        parent = id_to_concept.get(edge['parent_id'])
-        child = id_to_concept.get(edge['child_id'])
-        if parent and child:
-            p_safe = parent.replace('"', '')
-            c_safe = child.replace('"', '')
-            lines.append(f'  {edge["parent_id"]}["{p_safe}"] --> {edge["child_id"]}["{c_safe}"]')
-    
-    lines.append("```\n")
-    
-    lines.append("## Concepts Explained\n")
-    for n in nodes:
-        lines.append(f"### {n['concept']}\n")
-        lines.append(n['explanation'])
-        lines.append("\n")
-        
+
     with open("report.md", "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-    
-    console.print("[bold green]Success: Report exported to report.md[/bold green]")
+        f.write(content)
+
+    scope = f"session #{session_id}" if session_id else "all sessions"
+    console.print(
+        f"[bold green]Success: Report exported to report.md ({scope})[/bold green]"
+    )
+
+
+def show_sessions():
+    """List all exploration sessions."""
+    sessions = list_sessions()
+    if not sessions:
+        console.print("[dim]No sessions found.[/dim]")
+        return
+
+    console.print("\n[bold cyan]Exploration Sessions:[/bold cyan]")
+    for s in sessions:
+        root_node = get_session_root(s["id"])
+        root_label = root_node["concept"] if root_node else s["name"]
+        console.print(
+            f"  [bold green]#{s['id']}[/bold green]  {root_label}  "
+            f"[dim]({s['created_at']})[/dim]"
+        )
+    console.print()
+
 
 def main():
-    if len(sys.argv) < 2:
-        console.print("[bold red]Usage: uvx --from . concept-dfs '<initial concept>'[/bold red]")
-        sys.exit(1)
-        
-    initial_query = " ".join(sys.argv[1:])
-    
-    init_db()
-    
-    if initial_query.lower() == "export":
-        export_report()
-        sys.exit(0)
-    
-    stack = [(None, initial_query)]
-    
-    console.print(f"[bold blue]Starting ConceptDFS for: {initial_query}[/bold blue]\n")
-    
-    while stack:
-        parent, concept = stack.pop()
-        
-        console.rule(f"[bold magenta]Exploring: {concept}[/bold magenta]")
-        
-        node = get_node(concept)
-        if node:
-            explanation = node['explanation']
-            insert_node(parent, concept, explanation)
-            console.print("[dim italic]Loaded from local cache.[/dim italic]\n")
-            console.print(Markdown(explanation))
-            console.print()
-            
-            console.print("[dim]Type 'export' to save report, or press Enter to continue stack...[/dim]")
-            user_input = Prompt.ask("Action").strip()
-            if user_input.lower() == 'export':
-                export_report()
-            continue
-            
-        console.print(f"[yellow]Fetching explanation from LLM...[/yellow]")
-        try:
-            response = fetch_concept(concept)
-            explanation = response.explanation
-            keywords = response.keywords
-            
-            insert_node(parent, concept, explanation)
-            
-        except Exception as e:
-            console.print(f"[bold red]Error fetching concept: {e}[/bold red]")
-            continue
-            
-        console.print(Markdown(explanation))
-        console.print()
-        
-        if keywords:
-            console.print("[bold cyan]Related concepts to explore:[/bold cyan]")
-            for i, kw in enumerate(keywords, 1):
-                console.print(f"  [bold green]{i}.[/bold green] {kw}")
-                
-            console.print("\n[dim]Enter space-separated numbers to push them onto the stack (e.g., '1 3'), 'export' to save report, or press Enter to skip.[/dim]")
-            
-            while True:
-                user_input = Prompt.ask("Your choice").strip()
-                
-                if user_input.lower() == 'export':
-                    export_report()
-                    continue
-                    
-                if not user_input:
-                    break
-                    
-                parts = user_input.split()
-                valid = True
-                selected_indices = []
-                for p in parts:
-                    if p.isdigit():
-                        idx = int(p)
-                        if 1 <= idx <= len(keywords):
-                            selected_indices.append(idx - 1)
-                        else:
-                            console.print(f"[red]Invalid number: {idx}[/red]")
-                            valid = False
-                    else:
-                        console.print(f"[red]Invalid input: {p}[/red]")
-                        valid = False
-                        
-                if valid:
-                    # Push descending order so they are popped in ascending order
-                    for idx in reversed(selected_indices):
-                        stack.append((concept, keywords[idx]))
-                    break
+    if len(sys.argv) >= 2:
+        first_arg = sys.argv[1].lower()
 
-    console.print("[bold green]Exploration complete! Stack is empty.[/bold green]")
-    export_now = Prompt.ask("Would you like to export the final report? (y/n)").strip().lower()
-    if export_now in ['y', 'yes', 'export']:
-        export_report()
+        if first_arg == "export":
+            init_db()
+            # Check for --session N flag
+            sid = None
+            if "--session" in sys.argv:
+                idx = sys.argv.index("--session")
+                if idx + 1 < len(sys.argv):
+                    try:
+                        sid = int(sys.argv[idx + 1])
+                    except ValueError:
+                        console.print("[red]Invalid session ID.[/red]")
+                        return
+            export_report(session_id=sid)
+            return
+        elif first_arg == "sessions":
+            init_db()
+            show_sessions()
+            return
+        elif first_arg == "model":
+            select_model()
+            return
+        elif first_arg == "auth":
+            force_auth()
+            return
+        elif first_arg in ("--help", "-h", "help"):
+            console.print("[cyan]ConceptDFS[/cyan]")
+            console.print("\n[bold]Usage:[/bold]")
+            console.print("  concept-dfs              - Launch the interactive TUI")
+            console.print(
+                "  concept-dfs <concept>    - Launch the TUI with an initial concept"
+            )
+            console.print("  concept-dfs model        - Select LLM provider and model")
+            console.print("  concept-dfs auth         - Configure API keys")
+            console.print("  concept-dfs sessions     - List all exploration sessions")
+            console.print(
+                "  concept-dfs export       - Export all sessions to report.md"
+            )
+            console.print(
+                "  concept-dfs export --session N  - Export a specific session"
+            )
+            return
+        else:
+            # Treat remaining args as the initial concept
+            initial_concept = " ".join(sys.argv[1:])
+            app = ConceptDFSApp(initial_concept=initial_concept)
+            app.run()
+            return
+
+    # No arguments — launch the interactive Textual TUI
+    app = ConceptDFSApp()
+    app.run()
+
 
 if __name__ == "__main__":
     main()

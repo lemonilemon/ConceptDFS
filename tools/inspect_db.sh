@@ -1,6 +1,6 @@
 #!/bin/bash
 # A simple wrapper to execute SQL against the local cache using Python.
-DB_PATH=${CONCEPT_DFS_DB:-concepts.db}
+DB_PATH=${CONCEPT_DFS_DB:-${XDG_DATA_HOME:-$HOME/.local/share}/concept-dfs/concepts.db}
 python3 -c "
 import sqlite3, sys
 conn = sqlite3.connect('$DB_PATH')

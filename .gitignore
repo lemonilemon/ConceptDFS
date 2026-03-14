@@ -10,6 +10,9 @@ build/
 .venv/
 venv/
 
+# Environment variables
+.env
+
 # SQLite database
 concepts.db
 
