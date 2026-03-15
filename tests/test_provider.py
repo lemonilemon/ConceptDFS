@@ -24,7 +24,7 @@ def isolate_auth(tmp_path, monkeypatch):
     """Redirect auth storage to a temp directory for all tests."""
     auth_dir = tmp_path / "concept-dfs"
     auth_file = auth_dir / "auth.json"
-    monkeypatch.setattr(provider_module, "DATA_DIR", auth_dir)
+    monkeypatch.setattr(provider_module, "CONFIG_DIR", auth_dir)
     monkeypatch.setattr(provider_module, "AUTH_FILE", auth_file)
     # Clear any provider env vars
     for info in PROVIDERS.values():

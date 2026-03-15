@@ -301,14 +301,12 @@ class ModelSelectScreen(ModalScreen[Optional[str]]):
         with Vertical(id="model-dialog") as dialog:
             dialog.border_title = "Select Provider"
             yield OptionList(
-                *[
-                    Option(f"{info.name}  ({info.default_model})")
-                    for info in PROVIDERS.values()
-                ],
+                *[Option(info.name) for info in PROVIDERS.values()],
                 id="provider-list",
             )
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        event.stop()
         provider_ids = list(PROVIDERS.keys())
         self._selected_provider = provider_ids[event.option_index]
         info = PROVIDERS[self._selected_provider]
@@ -323,6 +321,7 @@ class ModelSelectScreen(ModalScreen[Optional[str]]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if self._selected_provider and event.input.id == "model-input":
+            event.stop()
             model = (
                 event.value.strip() or PROVIDERS[self._selected_provider].default_model
             )
@@ -385,6 +384,7 @@ class AuthScreen(ModalScreen[Optional[str]]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if self._provider_id and event.input.id == "auth-input":
+            event.stop()
             key = event.value.strip()
             if key:
                 save_api_key(self._provider_id, key)
@@ -450,6 +450,7 @@ class SessionListScreen(ModalScreen[Optional[int]]):
                 yield OptionList(*options, id="session-list")
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        event.stop()
         if self._sessions:
             session = self._sessions[event.option_index]
             self.dismiss(session["id"])
@@ -672,6 +673,8 @@ class ConceptDFSApp(App):
     # ------------------------------------------------------------------
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "prompt":
+            return
         value = event.value.strip()
         event.input.clear()
 

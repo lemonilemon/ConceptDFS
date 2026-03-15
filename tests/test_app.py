@@ -7,7 +7,14 @@ from unittest.mock import patch
 from rich.text import Text
 from textual.widgets import Tree
 
-from concept_dfs.app import ConceptDFSApp, GraphScreen, KeywordSelector
+from concept_dfs.app import (
+    ConceptDFSApp,
+    GraphScreen,
+    KeywordSelector,
+    ModelSelectScreen,
+    AuthScreen,
+    SessionListScreen,
+)
 from concept_dfs.db import create_session, init_db, insert_node
 
 
@@ -452,3 +459,178 @@ async def test_graph_screen_current_concept(test_db):
         assert len(current) == 1
         assert "\u25b6" in str(current[0].label)
         assert _markup(current[0].label).startswith("[bold yellow]")
+
+
+# ── Modal event isolation tests (regression) ──
+
+
+@pytest.mark.asyncio
+async def test_model_select_input_does_not_trigger_exploration(test_db, tmp_path):
+    """Input.Submitted from ModelSelectScreen must NOT reach the main app handler."""
+    # Patch DATA_DIR and AUTH_FILE so save_model writes to a temp directory
+    tmp_auth = tmp_path / "auth.json"
+    with (
+        patch("concept_dfs.provider.CONFIG_DIR", tmp_path),
+        patch("concept_dfs.provider.AUTH_FILE", tmp_auth),
+    ):
+        app = ConceptDFSApp()
+        async with app.run_test() as pilot:
+            app._state = "initial"
+
+            # Push ModelSelectScreen like /model command does
+            app.push_screen(ModelSelectScreen())
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, ModelSelectScreen)
+
+            # Select a provider (first one)
+            option_list = screen.query_one("#provider-list")
+            option_list.action_select()
+            await pilot.pause()
+
+            # Now type a model name and submit
+            model_input = screen.query_one("#model-input")
+            model_input.value = "test-model-123"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # The model name must NOT have started exploration
+            assert app._state == "initial"
+            assert app._session_id is None
+            assert len(app._stack) == 0
+
+
+@pytest.mark.asyncio
+async def test_auth_screen_input_does_not_trigger_exploration(test_db, tmp_path):
+    """Input.Submitted from AuthScreen must NOT reach the main app handler."""
+    # Patch DATA_DIR and AUTH_FILE so save_model writes to a temp directory
+    tmp_auth = tmp_path / "auth.json"
+    with (
+        patch("concept_dfs.provider.CONFIG_DIR", tmp_path),
+        patch("concept_dfs.provider.AUTH_FILE", tmp_auth),
+    ):
+        from concept_dfs.provider import save_model
+
+        # Need a model set so AuthScreen shows the input field
+        save_model("openai:gpt-4.1")
+
+        app = ConceptDFSApp()
+        async with app.run_test() as pilot:
+            app._state = "initial"
+
+            app.push_screen(AuthScreen())
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, AuthScreen)
+
+            auth_input = screen.query_one("#auth-input")
+            auth_input.value = "sk-fake-key-12345"
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # The API key must NOT have started exploration
+            assert app._state == "initial"
+            assert app._session_id is None
+            assert len(app._stack) == 0
+
+
+# ── Modal screen flow tests ──
+
+
+@pytest.mark.asyncio
+async def test_model_select_screen_dismiss_on_cancel(test_db):
+    """Pressing Escape on ModelSelectScreen dismisses it with None."""
+    app = ConceptDFSApp()
+    async with app.run_test() as pilot:
+        results = []
+        app.push_screen(ModelSelectScreen(), callback=lambda r: results.append(r))
+        await pilot.pause()
+
+        assert isinstance(app.screen, ModelSelectScreen)
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert not isinstance(app.screen, ModelSelectScreen)
+        assert results == [None]
+
+
+@pytest.mark.asyncio
+async def test_model_select_screen_returns_model_string(test_db, tmp_path):
+    """ModelSelectScreen returns 'provider:model' on successful selection."""
+    # Patch DATA_DIR and AUTH_FILE so save_model writes to a temp directory
+    tmp_auth = tmp_path / "auth.json"
+    with (
+        patch("concept_dfs.provider.CONFIG_DIR", tmp_path),
+        patch("concept_dfs.provider.AUTH_FILE", tmp_auth),
+    ):
+        app = ConceptDFSApp()
+        async with app.run_test() as pilot:
+            results = []
+            app.push_screen(ModelSelectScreen(), callback=lambda r: results.append(r))
+            await pilot.pause()
+
+            screen = app.screen
+            assert isinstance(screen, ModelSelectScreen)
+
+            # Select first provider
+            option_list = screen.query_one("#provider-list")
+            option_list.action_select()
+            await pilot.pause()
+
+            # Accept the default model
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert not isinstance(app.screen, ModelSelectScreen)
+            assert len(results) == 1
+            assert results[0] is not None
+            # Should be "provider_id:model_name" format
+            assert ":" in results[0]
+
+
+@pytest.mark.asyncio
+async def test_auth_screen_dismiss_on_cancel(test_db, tmp_path):
+    """Pressing Escape on AuthScreen dismisses it with None."""
+    tmp_auth = tmp_path / "auth.json"
+    with (
+        patch("concept_dfs.provider.CONFIG_DIR", tmp_path),
+        patch("concept_dfs.provider.AUTH_FILE", tmp_auth),
+    ):
+        from concept_dfs.provider import save_model
+
+        save_model("openai:gpt-4.1")
+
+        app = ConceptDFSApp()
+        async with app.run_test() as pilot:
+            results = []
+            app.push_screen(AuthScreen(), callback=lambda r: results.append(r))
+            await pilot.pause()
+
+            assert isinstance(app.screen, AuthScreen)
+
+            await pilot.press("escape")
+            await pilot.pause()
+
+            assert not isinstance(app.screen, AuthScreen)
+            assert results == [None]
+
+
+@pytest.mark.asyncio
+async def test_session_list_screen_dismiss_on_cancel(test_db):
+    """Pressing Escape on SessionListScreen dismisses it with None."""
+    app = ConceptDFSApp()
+    async with app.run_test() as pilot:
+        results = []
+        app.push_screen(SessionListScreen(), callback=lambda r: results.append(r))
+        await pilot.pause()
+
+        assert isinstance(app.screen, SessionListScreen)
+
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert not isinstance(app.screen, SessionListScreen)
+        assert results == [None]

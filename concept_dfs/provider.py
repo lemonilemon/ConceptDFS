@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from typing import Optional, Dict, List
 from rich.console import Console
 from rich.prompt import Prompt
-from concept_dfs.paths import DATA_DIR
+from concept_dfs.paths import CONFIG_DIR
 
 console = Console()
 
-AUTH_FILE = DATA_DIR / "auth.json"
+AUTH_FILE = CONFIG_DIR / "auth.json"
 
 
 class MissingAPIKeyError(Exception):
@@ -73,7 +73,7 @@ def _load_auth() -> dict:
 
 def _save_auth(data: dict) -> None:
     """Write credentials to auth.json."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     AUTH_FILE.write_text(json.dumps(data, indent=2) + "\n")
     AUTH_FILE.chmod(0o600)
 
